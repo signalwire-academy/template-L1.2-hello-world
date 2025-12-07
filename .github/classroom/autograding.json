@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "Agent Instantiation",
+      "setup": "pip install signalwire-agents",
+      "run": "swaig-test solution/agent.py --list-tools",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 25
+    },
+    {
+      "name": "SWML Generation",
+      "setup": "",
+      "run": "swaig-test solution/agent.py --dump-swml --raw | python -c \"import sys,json; d=json.load(sys.stdin); exit(0 if 'sections' in d and 'main' in d['sections'] else 1)\"",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 25
+    },
+    {
+      "name": "Prompt Configuration",
+      "setup": "",
+      "run": "swaig-test solution/agent.py --dump-swml --raw | python -c \"import sys,json; d=json.load(sys.stdin); exit(0 if 'prompt' in str(d) else 1)\"",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 25
+    },
+    {
+      "name": "Language Configuration",
+      "setup": "",
+      "run": "swaig-test solution/agent.py --dump-swml --raw | python -c \"import sys,json; d=json.load(sys.stdin); exit(0 if 'languages' in str(d) else 1)\"",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 25
+    }
+  ]
+}
