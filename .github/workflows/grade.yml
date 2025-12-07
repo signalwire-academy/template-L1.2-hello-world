@@ -77,6 +77,20 @@ jobs:
 
           agent_file = 'solution/agent.py'
 
+          # Get SWML once for all checks that need it
+          swml_result = subprocess.run(
+              ['swaig-test', agent_file, '--dump-swml', '--raw'],
+              capture_output=True, text=True, timeout=30
+          )
+          swml_data = None
+          swml_text = ""
+          if swml_result.returncode == 0:
+              try:
+                  swml_data = json.loads(swml_result.stdout)
+                  swml_text = swml_result.stdout.lower()
+              except:
+                  pass
+
           for check in config['checks']:
               check_result = {
                   'id': check['id'],
@@ -98,40 +112,44 @@ jobs:
                           check_result['output'] = result.stderr[:200]
 
                   elif check['type'] == 'swml_valid':
-                      result = subprocess.run(
-                          ['swaig-test', agent_file, '--dump-swml', '--raw'],
-                          capture_output=True, text=True, timeout=30
-                      )
-                      if result.returncode == 0:
-                          try:
-                              swml = json.loads(result.stdout)
-                              check_result['passed'] = True
-
-                              for req in check.get('require', []):
-                                  path = req['path']
-                                  contains = req.get('contains')
-
-                                  value = swml
-                                  for part in path.replace('[', '.').replace(']', '').split('.'):
-                                      if part.isdigit():
+                      if swml_data:
+                          check_result['passed'] = True
+                          for req in check.get('require', []):
+                              path = req.get('path', '')
+                              value = swml_data
+                              for part in path.replace('[', '.').replace(']', '').split('.'):
+                                  if not part:
+                                      continue
+                                  if part.isdigit():
+                                      try:
                                           value = value[int(part)]
-                                      else:
-                                          value = value.get(part)
-                                      if value is None:
-                                          check_result['passed'] = False
-                                          check_result['output'] = f"Missing: {path}"
+                                      except (IndexError, KeyError, TypeError):
+                                          value = None
                                           break
-
-                                  if check_result['passed'] and contains:
-                                      if contains.lower() not in str(value).lower():
-                                          check_result['passed'] = False
-                                          check_result['output'] = f"'{contains}' not found in {path}"
-
-                          except json.JSONDecodeError:
-                              check_result['output'] = 'Invalid JSON output'
-                              check_result['passed'] = False
+                                  else:
+                                      try:
+                                          value = value.get(part)
+                                      except (AttributeError, TypeError):
+                                          value = None
+                                          break
+                              if value is None:
+                                  check_result['passed'] = False
+                                  check_result['output'] = f"Missing: {path}"
+                                  break
                       else:
-                          check_result['output'] = result.stderr[:200]
+                          check_result['output'] = 'Could not generate SWML'
+
+                  elif check['type'] == 'swml_contains':
+                      if swml_text:
+                          check_result['passed'] = True
+                          for req in check.get('require', []):
+                              text = req.get('text', '').lower()
+                              if text and text not in swml_text:
+                                  check_result['passed'] = False
+                                  check_result['output'] = f"'{text}' not found in SWML"
+                                  break
+                      else:
+                          check_result['output'] = 'Could not generate SWML'
 
               except subprocess.TimeoutExpired:
                   check_result['output'] = 'Timeout exceeded'
@@ -187,7 +205,7 @@ jobs:
           from datetime import datetime
           report += f"\n\n---\n*Graded: {datetime.utcnow().isoformat()}Z*"
 
-          # Post to GitHub Issues using the API
+          # Post to GitHub Issues
           github_token = os.environ.get('GITHUB_TOKEN')
           repo_full = os.environ.get('GITHUB_REPOSITORY', '')
 
@@ -207,7 +225,6 @@ jobs:
                       issues = json.loads(resp.read().decode())
 
                   if issues:
-                      # Comment on existing issue
                       issue_num = issues[0]['number']
                       comment_url = f"{api_base}/repos/{repo_full}/issues/{issue_num}/comments"
                       data = json.dumps({"body": report}).encode()
@@ -215,7 +232,6 @@ jobs:
                       with urllib.request.urlopen(req) as resp:
                           print(f"Added comment to issue #{issue_num}")
                   else:
-                      # Create new issue
                       create_url = f"{api_base}/repos/{repo_full}/issues"
                       data = json.dumps({
                           "title": "Grading Results",
@@ -231,10 +247,6 @@ jobs:
                   print(f"GitHub API error: {e.code} - {e.read().decode()[:200]}")
               except Exception as e:
                   print(f"Error posting to GitHub: {e}")
-          else:
-              print("No GITHUB_TOKEN or GITHUB_REPOSITORY - skipping issue creation")
-              print("Report would be:")
-              print(report)
 
           GRADESCRIPT
 
