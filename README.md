@@ -88,4 +88,10 @@ See `reference/starter.py` for a boilerplate template.
 
 ---
 
+## Next Assignment
+
+Ready to continue? [**Start Lab 1.4: First Live Call**](https://classroom.github.com/a/6rWDp5TB)
+
+---
+
 *SignalWire AI Agents Certification - Level 1*
